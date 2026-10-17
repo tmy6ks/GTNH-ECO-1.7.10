@@ -52,8 +52,17 @@ Neo ECO AE Extension - GTNH 1.7.10 是 [Neo ECO AE Extension](https://github.com
    比较时**忽略样板 NBT 里的 `encodedAt` 编码时间戳**（原版正是因为该时间戳每次都不同，
    导致去重判定永远失败）。若已存在同配方样板，则拒绝本次上传，并把该样板**回收为空白样板**
    退回网络 / 玩家，不再产生重复样板。
+7. **不消耗物品反查配方池（补全识别）**：不再靠"逐个候选去试配方"来猜，而是直接向 GT 的配方池反查——
+   遍历 `RecipeMap.ALL_RECIPE_MAPS`，用两条判据命中：
+   - `RecipeMap.getNonConsumedInputItemIds()`：该池全部配方 `mInputs` 中 `stackSize == 0` 的物品，
+     覆盖 **粉催化剂、透镜** 等；
+   - `GTRecipe.mSpecialItems`（特种槽，声明为 `Object`，实际可能是 `ItemStack` / `ItemStack[]` / `Object[]`），
+     覆盖 **模具、模头** 等。
 
-可直接使用 Release 中附带的 `neoecoae-7.3.0-beta2-fix1.jar`（已注入全部补丁，放进 `.minecraft/mods` 即可）；
+   命中后即可得到所属配方池（`unlocalizedName` 即机器类型）。结果按物品缓存，且只在常规匹配全部失败时才触发，
+   不增加正常路径开销。
+
+可直接使用 Release 中附带的 `neoecoae-7.3.0-beta2-fix2.jar`（已注入全部补丁，放进 `.minecraft/mods` 即可）；
 如需自行构建，步骤见 [MODIFICATIONS.md](/MODIFICATIONS.md)。
 另含一份 100% 还原上游的 `neoecoae-7.3.0-beta2-stock.jar`（不含本 fork 任何补丁）。
 

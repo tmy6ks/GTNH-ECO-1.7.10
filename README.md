@@ -58,8 +58,13 @@ This fork adds a set of GTNH mold-recipe-oriented improvements to pattern auto-u
 4. **Targets with the correct mold are ranked first**: auto-upload is more likely to pick the target that already holds the matching mold.
 5. **Matching fix**: recipes that need a mold now match the target that actually holds the corresponding mold, fixing the original "wrong target uploaded" behavior.
 6. **Duplicate patterns are rejected and recycled into blank patterns**: before uploading, the session checks whether the network already holds a pattern for the same recipe, comparing the pattern NBT **while ignoring the `encodedAt` encoding timestamp** (upstream compared it too, and since that timestamp differs on every encode, duplicate detection never fired). If a pattern for the same recipe already exists, the upload is rejected and that pattern is **recycled back into a blank pattern** and returned to the network / player instead of creating a duplicate.
+7. **Non-consumed items resolved by reverse lookup over recipe pools**: instead of guessing one candidate at a time, the patch asks GT directly. It walks `RecipeMap.ALL_RECIPE_MAPS` and matches on two criteria:
+   - `RecipeMap.getNonConsumedInputItemIds()` — items appearing in any recipe's `mInputs` with `stackSize == 0`, covering **powder catalysts and lenses**;
+   - `GTRecipe.mSpecialItems` — the special slot, declared as `Object` and actually holding an `ItemStack`, `ItemStack[]` or `Object[]`, covering **molds and mold heads**.
 
-You can use the prebuilt `neoecoae-7.3.0-beta2-fix1.jar` attached to the Release (all patches already injected, drop it into `.minecraft/mods`); for a from-source build, see [MODIFICATIONS.md](/MODIFICATIONS.md). A 100% upstream-stock `neoecoae-7.3.0-beta2-stock.jar` (none of this fork's patches) is also provided.
+   A hit yields the owning recipe pool (`unlocalizedName` is the machine type). Results are cached per item and the lookup only runs when normal matching has already failed, so the hot path is unaffected.
+
+You can use the prebuilt `neoecoae-7.3.0-beta2-fix2.jar` attached to the Release (all patches already injected, drop it into `.minecraft/mods`); for a from-source build, see [MODIFICATIONS.md](/MODIFICATIONS.md). A 100% upstream-stock `neoecoae-7.3.0-beta2-stock.jar` (none of this fork's patches) is also provided.
 
 ## License
 

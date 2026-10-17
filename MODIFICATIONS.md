@@ -21,6 +21,17 @@ GPL-3.0）。**上游的代码、LICENSE、作者署名全部原样保留**，�
    比较时剔除样板 NBT 顶层的 `encodedAt` 编码时间戳——原版直接比 NBT，而 `encodedAt` 每次编码都不同，
    导致 `neoecoae$recycleDuplicate` 的去重判定永远为假。修复后若网络中已存在同配方样板，
    则**拒绝本次上传**，并把该样板**回收为空白样板**退回网络 / 玩家。
+7. **不消耗物品反查配方池（补全识别）**：GT 里的「不消耗物品」有多个类别（模具、模头、粉为催化剂、
+   透镜等），且每类都有很多种，无法枚举。改为向配方池反查——遍历 `RecipeMap.ALL_RECIPE_MAPS`，
+   两条判据任一命中即确认：
+   - `RecipeMap.getNonConsumedInputItemIds()`：其内部遍历该池全部配方、收集 `mInputs` 中
+     `stackSize == 0` 的物品，对应**粉催化剂、透镜**等；
+   - `GTRecipe.mSpecialItems`：特种槽，声明为 `Object`（实际可能是 `ItemStack` / `ItemStack[]` /
+     `Object[]`），对应**模具、模头**等。GT 自带的 `getNonConsumedInputItemIds()` **不扫描它**，
+     因此必须单独扫。
+
+   命中后即得所属配方池（`unlocalizedName` 可推断机器类型）。结果缓存在
+   `neoecoae$ncCache`（`ItemId -> String`），且仅在常规匹配全部失败时才触发反查。
 
 ## 实现方式说明（重要）
 
@@ -51,7 +62,7 @@ ASM 补丁脚本源码。上游的 `src/` 目录**完全未被改动**。
    ```
    python patches/inject56.py <官方jar> <产物jar> <条目名> <class文件路径>
    ```
-3. 或者直接用 GitHub Release 里附带的 `neoecoae-7.3.0-beta2-fix1.jar`（已注入全部补丁，可直接放进
+3. 或者直接用 GitHub Release 里附带的 `neoecoae-7.3.0-beta2-fix2.jar`（已注入全部补丁，可直接放进
    `.minecraft/mods`）。
 
 ## GPL-3.0 合规
