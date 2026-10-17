@@ -66,6 +66,10 @@ Neo ECO AE Extension - GTNH 1.7.10 是 [Neo ECO AE Extension](https://github.com
    命中后即可得到所属配方池（`unlocalizedName` 即机器类型）。结果按物品缓存，且只在常规匹配全部失败时才触发，
    不增加正常路径开销。
 
+   **这个判据是通用的，不限于上面提到的类别**——任何在 GT 配方中作为「不消耗物品」出现的物品
+   （无论模具、模头、粉催化剂、透镜，还是其它模组自定义的特殊道具）都会被自动识别，
+   不需要逐个枚举，也不依赖任何白名单。新增模组或新增配方时无需再改补丁。
+
 可直接使用 Release 中附带的 `neoecoae-7.3.0-beta2-fix3.jar`（已注入全部补丁，放进 `.minecraft/mods` 即可）；
 如需自行构建，步骤见 [MODIFICATIONS.md](/MODIFICATIONS.md)。
 另含一份 100% 还原上游的 `neoecoae-7.3.0-beta2-stock.jar`（不含本 fork 任何补丁）。

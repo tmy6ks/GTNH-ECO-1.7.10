@@ -64,6 +64,8 @@ This fork adds a set of GTNH mold-recipe-oriented improvements to pattern auto-u
 
    A hit yields the owning recipe pool (`unlocalizedName` is the machine type). Results are cached per item and the lookup only runs when normal matching has already failed, so the hot path is unaffected.
 
+   The criterion is **generic, not limited to the categories above** — any item that appears as a non-consumed input in a GT recipe (molds, mold heads, powder catalysts, lenses, or custom items added by other mods) is recognized automatically. There is no whitelist to maintain, and new mods or recipes need no patch changes.
+
 You can use the prebuilt `neoecoae-7.3.0-beta2-fix3.jar` attached to the Release (all patches already injected, drop it into `.minecraft/mods`); for a from-source build, see [MODIFICATIONS.md](/MODIFICATIONS.md). A 100% upstream-stock `neoecoae-7.3.0-beta2-stock.jar` (none of this fork's patches) is also provided.
 
 ## License
