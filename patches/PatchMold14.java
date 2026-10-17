@@ -102,6 +102,7 @@ public class PatchMold14 {
         addMoldForHost(cn);
         addDiagMatch(cn);
         addSpecialItemIdSet(cn);
+        addMapNamesFor(cn);
         addLogStacks(cn);
         addLog2(cn);
 
@@ -119,6 +120,9 @@ public class PatchMold14 {
         // fix38diag：给上传/显示探针一条独立计数通道，不被 [M]/[S]/[H] 噪声挤掉
         cn.fields.add(new FieldNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
                 "neoecoae$diagN2", "I", null, null));
+        // fix1（反查路线）：ItemId -> "map1,map2" 缓存，避免重复遍历 ALL_RECIPE_MAPS
+        cn.fields.add(new FieldNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
+                "neoecoae$ncCache", "Ljava/util/HashMap;", null, null));
 
         for (MethodNode mn : cn.methods) {
             if ("neoecoae$appendNotConsumedContext".equals(mn.name)) {
@@ -1021,8 +1025,48 @@ public class PatchMold14 {
         ins.add(lHit);
         ins.add(new JumpInsnNode(Opcodes.GOTO, lLoop));
 
-        // lLoopEnd: return (ItemStack) cands.get(0);
+        // lLoopEnd: 反查兜底（fix1）——逐候选问 GT「它是不是某个配方池的不消耗物品」
+        //   for (c : cands) { nm = mapNamesFor(c); if (nm.length() > 0) { log; return c; } }
+        // 全部不命中才回退到原来的 cands.get(0)。
         ins.add(lLoopEnd);
+        LabelNode lNcLoop = new LabelNode();
+        LabelNode lNcNext = new LabelNode();
+        LabelNode lNcDone = new LabelNode();
+        ins.add(new VarInsnNode(Opcodes.ALOAD, 4));
+        ins.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/List", "iterator",
+                "()Ljava/util/Iterator;", true));
+        ins.add(new VarInsnNode(Opcodes.ASTORE, 9));
+        ins.add(lNcLoop);
+        ins.add(new VarInsnNode(Opcodes.ALOAD, 9));
+        ins.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Iterator", "hasNext", "()Z", true));
+        ins.add(new JumpInsnNode(Opcodes.IFEQ, lNcDone));
+        ins.add(new VarInsnNode(Opcodes.ALOAD, 9));
+        ins.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Iterator", "next",
+                "()Ljava/lang/Object;", true));
+        ins.add(new TypeInsnNode(Opcodes.CHECKCAST, ITEM_STACK));
+        ins.add(new VarInsnNode(Opcodes.ASTORE, 10));
+        // String nm = neoecoae$mapNamesFor(c);  // 复用 local 7
+        ins.add(new VarInsnNode(Opcodes.ALOAD, 10));
+        ins.add(new MethodInsnNode(Opcodes.INVOKESTATIC, MATCHER, "neoecoae$mapNamesFor",
+                "(L" + ITEM_STACK + ";)Ljava/lang/String;", false));
+        ins.add(new VarInsnNode(Opcodes.ASTORE, 7));
+        // if (nm.length() == 0) continue;
+        ins.add(new VarInsnNode(Opcodes.ALOAD, 7));
+        ins.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/String", "length", "()I", false));
+        ins.add(new JumpInsnNode(Opcodes.IFEQ, lNcNext));
+        // log("[S] ncHit=", nm)
+        ins.add(new LdcInsnNode("[S] ncHit="));
+        ins.add(new VarInsnNode(Opcodes.ALOAD, 7));
+        ins.add(new MethodInsnNode(Opcodes.INVOKESTATIC, MATCHER, "neoecoae$log",
+                "(Ljava/lang/Object;Ljava/lang/Object;)V", false));
+        // return c;
+        ins.add(new VarInsnNode(Opcodes.ALOAD, 10));
+        ins.add(new InsnNode(Opcodes.ARETURN));
+        ins.add(lNcNext);
+        ins.add(new JumpInsnNode(Opcodes.GOTO, lNcLoop));
+
+        // lNcDone: 原逻辑 return (ItemStack) cands.get(0);
+        ins.add(lNcDone);
         ins.add(new VarInsnNode(Opcodes.ALOAD, 4));
         ins.add(new InsnNode(Opcodes.ICONST_0));
         ins.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/List", "get", "(I)Ljava/lang/Object;", true));
@@ -1044,6 +1088,143 @@ public class PatchMold14 {
 
         mn.maxStack = 6;
         mn.maxLocals = 11;
+        cn.methods.add(mn);
+    }
+
+    /**
+     * 反查路线（fix1）：private static String neoecoae$mapNamesFor(ItemStack)
+     *
+     * 不再"猜"某个物品是不是模具，而是直接问 GT 的配方池：
+     *   RecipeMap.ALL_RECIPE_MAPS -> 每个 map.getNonConsumedInputItemIds()
+     * 后者内部遍历该池全部配方、收集 mInputs 中 stackSize==0 的物品 ItemId，
+     * 正对应「模具放在 mInputs 且数量 0」这一表示法（挤出机等即是如此）。
+     *
+     * 返回命中池的 unlocalizedName（逗号分隔，可据此推断机器类型）；无命中返回 ""。
+     * 结果缓存在 neoecoae$ncCache（ItemId -> String），只付一次遍历代价。
+     */
+    private static void addMapNamesFor(ClassNode cn) {
+        MethodNode mn = new MethodNode(
+                Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
+                "neoecoae$mapNamesFor",
+                "(L" + ITEM_STACK + ";)Ljava/lang/String;", null, null);
+        InsnList c = mn.instructions;
+
+        LabelNode lHave = new LabelNode();
+        LabelNode lCached = new LabelNode();
+        LabelNode lBuild = new LabelNode();
+        LabelNode lHead = new LabelNode();
+        LabelNode lSkip = new LabelNode();
+        LabelNode lAppend = new LabelNode();
+        LabelNode lEnd = new LabelNode();
+
+        // if (stack == null) return "";
+        c.add(new VarInsnNode(Opcodes.ALOAD, 0));
+        c.add(new JumpInsnNode(Opcodes.IFNONNULL, lHave));
+        c.add(new LdcInsnNode(""));
+        c.add(new InsnNode(Opcodes.ARETURN));
+
+        // ItemId id = ItemId.create(stack);  // local 1
+        c.add(lHave);
+        c.add(new VarInsnNode(Opcodes.ALOAD, 0));
+        c.add(new MethodInsnNode(Opcodes.INVOKESTATIC, GT_UTILITY_ITEM_ID, "create",
+                "(L" + ITEM_STACK + ";)L" + GT_UTILITY_ITEM_ID + ";", false));
+        c.add(new VarInsnNode(Opcodes.ASTORE, 1));
+
+        // if (neoecoae$ncCache == null) neoecoae$ncCache = new HashMap();
+        c.add(new FieldInsnNode(Opcodes.GETSTATIC, MATCHER, "neoecoae$ncCache", "Ljava/util/HashMap;"));
+        c.add(new JumpInsnNode(Opcodes.IFNONNULL, lCached));
+        c.add(new TypeInsnNode(Opcodes.NEW, "java/util/HashMap"));
+        c.add(new InsnNode(Opcodes.DUP));
+        c.add(new MethodInsnNode(Opcodes.INVOKESPECIAL, "java/util/HashMap", "<init>", "()V", false));
+        c.add(new FieldInsnNode(Opcodes.PUTSTATIC, MATCHER, "neoecoae$ncCache", "Ljava/util/HashMap;"));
+
+        // Object hit = cache.get(id); if (hit != null) return (String) hit;
+        c.add(lCached);
+        c.add(new FieldInsnNode(Opcodes.GETSTATIC, MATCHER, "neoecoae$ncCache", "Ljava/util/HashMap;"));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 1));
+        c.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/util/HashMap", "get",
+                "(Ljava/lang/Object;)Ljava/lang/Object;", false));
+        c.add(new VarInsnNode(Opcodes.ASTORE, 2));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 2));
+        c.add(new JumpInsnNode(Opcodes.IFNULL, lBuild));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 2));
+        c.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/lang/String"));
+        c.add(new InsnNode(Opcodes.ARETURN));
+
+        // StringBuilder sb = new StringBuilder();  // local 3
+        c.add(lBuild);
+        c.add(new TypeInsnNode(Opcodes.NEW, "java/lang/StringBuilder"));
+        c.add(new InsnNode(Opcodes.DUP));
+        c.add(new MethodInsnNode(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "()V", false));
+        c.add(new VarInsnNode(Opcodes.ASTORE, 3));
+
+        // Iterator it = RecipeMap.ALL_RECIPE_MAPS.values().iterator();  // local 4
+        c.add(new FieldInsnNode(Opcodes.GETSTATIC, RECIPE_MAP, "ALL_RECIPE_MAPS", "Ljava/util/Map;"));
+        c.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Map", "values",
+                "()Ljava/util/Collection;", true));
+        c.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Collection", "iterator",
+                "()Ljava/util/Iterator;", true));
+        c.add(new VarInsnNode(Opcodes.ASTORE, 4));
+
+        // while (it.hasNext()) { RecipeMap m = (RecipeMap) it.next();  // local 5
+        c.add(lHead);
+        c.add(new VarInsnNode(Opcodes.ALOAD, 4));
+        c.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Iterator", "hasNext", "()Z", true));
+        c.add(new JumpInsnNode(Opcodes.IFEQ, lEnd));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 4));
+        c.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Iterator", "next",
+                "()Ljava/lang/Object;", true));
+        c.add(new TypeInsnNode(Opcodes.CHECKCAST, RECIPE_MAP));
+        c.add(new VarInsnNode(Opcodes.ASTORE, 5));
+
+        // if (!m.getNonConsumedInputItemIds().contains(id)) continue;
+        c.add(new VarInsnNode(Opcodes.ALOAD, 5));
+        c.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, RECIPE_MAP, "getNonConsumedInputItemIds",
+                "()Ljava/util/Set;", false));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 1));
+        c.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Set", "contains",
+                "(Ljava/lang/Object;)Z", true));
+        c.add(new JumpInsnNode(Opcodes.IFEQ, lSkip));
+
+        // if (sb.length() > 0) sb.append(',');
+        c.add(new VarInsnNode(Opcodes.ALOAD, 3));
+        c.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "length", "()I", false));
+        c.add(new JumpInsnNode(Opcodes.IFEQ, lAppend));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 3));
+        c.add(new LdcInsnNode(","));
+        c.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append",
+                "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false));
+        c.add(new InsnNode(Opcodes.POP));
+
+        // sb.append(m.unlocalizedName);
+        c.add(lAppend);
+        c.add(new VarInsnNode(Opcodes.ALOAD, 3));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 5));
+        c.add(new FieldInsnNode(Opcodes.GETFIELD, RECIPE_MAP, "unlocalizedName", "Ljava/lang/String;"));
+        c.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append",
+                "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false));
+        c.add(new InsnNode(Opcodes.POP));
+
+        c.add(lSkip);
+        c.add(new JumpInsnNode(Opcodes.GOTO, lHead));
+
+        // String r = sb.toString(); cache.put(id, r); return r;
+        c.add(lEnd);
+        c.add(new VarInsnNode(Opcodes.ALOAD, 3));
+        c.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString",
+                "()Ljava/lang/String;", false));
+        c.add(new VarInsnNode(Opcodes.ASTORE, 6));
+        c.add(new FieldInsnNode(Opcodes.GETSTATIC, MATCHER, "neoecoae$ncCache", "Ljava/util/HashMap;"));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 1));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 6));
+        c.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/util/HashMap", "put",
+                "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", false));
+        c.add(new InsnNode(Opcodes.POP));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 6));
+        c.add(new InsnNode(Opcodes.ARETURN));
+
+        mn.maxStack = 4;
+        mn.maxLocals = 7;
         cn.methods.add(mn);
     }
 
