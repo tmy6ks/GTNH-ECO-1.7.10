@@ -51,7 +51,7 @@ ASM 补丁脚本源码。上游的 `src/` 目录**完全未被改动**。
    ```
    python patches/inject56.py <官方jar> <产物jar> <条目名> <class文件路径>
    ```
-3. 或者直接用 GitHub Release 里附带的 `neoecoae-7.3.0-beta2-fix65-working.jar`（已注入全部补丁，可直接放进
+3. 或者直接用 GitHub Release 里附带的 `neoecoae-7.3.0-beta2-fix1.jar`（已注入全部补丁，可直接放进
    `.minecraft/mods`）。
 
 ## GPL-3.0 合规

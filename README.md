@@ -59,7 +59,7 @@ This fork adds a set of GTNH mold-recipe-oriented improvements to pattern auto-u
 5. **Matching fix**: recipes that need a mold now match the target that actually holds the corresponding mold, fixing the original "wrong target uploaded" behavior.
 6. **Duplicate patterns are rejected and recycled into blank patterns**: before uploading, the session checks whether the network already holds a pattern for the same recipe, comparing the pattern NBT **while ignoring the `encodedAt` encoding timestamp** (upstream compared it too, and since that timestamp differs on every encode, duplicate detection never fired). If a pattern for the same recipe already exists, the upload is rejected and that pattern is **recycled back into a blank pattern** and returned to the network / player instead of creating a duplicate.
 
-You can use the prebuilt `neoecoae-7.3.0-beta2-fix65-working.jar` attached to the Release (all patches already injected, drop it into `.minecraft/mods`); for a from-source build, see [MODIFICATIONS.md](/MODIFICATIONS.md). A 100% upstream-stock `neoecoae-7.3.0-beta2-stock.jar` (none of this fork's patches) is also provided.
+You can use the prebuilt `neoecoae-7.3.0-beta2-fix1.jar` attached to the Release (all patches already injected, drop it into `.minecraft/mods`); for a from-source build, see [MODIFICATIONS.md](/MODIFICATIONS.md). A 100% upstream-stock `neoecoae-7.3.0-beta2-stock.jar` (none of this fork's patches) is also provided.
 
 ## License
 

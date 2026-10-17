@@ -53,7 +53,7 @@ Neo ECO AE Extension - GTNH 1.7.10 是 [Neo ECO AE Extension](https://github.com
    导致去重判定永远失败）。若已存在同配方样板，则拒绝本次上传，并把该样板**回收为空白样板**
    退回网络 / 玩家，不再产生重复样板。
 
-可直接使用 Release 中附带的 `neoecoae-7.3.0-beta2-fix65-working.jar`（已注入全部补丁，放进 `.minecraft/mods` 即可）；
+可直接使用 Release 中附带的 `neoecoae-7.3.0-beta2-fix1.jar`（已注入全部补丁，放进 `.minecraft/mods` 即可）；
 如需自行构建，步骤见 [MODIFICATIONS.md](/MODIFICATIONS.md)。
 另含一份 100% 还原上游的 `neoecoae-7.3.0-beta2-stock.jar`（不含本 fork 任何补丁）。
 
