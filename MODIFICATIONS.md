@@ -24,6 +24,22 @@ GPL-3.0）。**上游的代码、LICENSE、作者署名全部原样保留**，�
 运行时反编译产物是混淆名、且本地无 GTNH 开发工具链无法编译验证，因此改动保留为可审计的
 ASM 补丁脚本源码。上游的 `src/` 目录**完全未被改动**。
 
+## 上游原版基线（重要）
+
+任何「还原 / 对比 / 重新打补丁」操作都必须以 **上游原版 jar 整包**为基准，不能从已打补丁的 jar 里挑几个类还原。
+
+| 项 | 值 |
+|---|---|
+| 文件 | `neoecoae-7.3.0-beta2.jar`（Release `stock-beta2` 附件同名） |
+| 大小 | `1112288` B |
+| MD5 | `f2dbf28640d4b63ad673ec99e3b11360` |
+| class 数 | 297（jar 条目 886） |
+| 补丁标记 | **0** —— `neoecoae$holdsRecipe` / `moldForHost` / `rankBonus` / `specialSlotFor` / `getMoldSuffix` / `sameRecipe` 等 20 个方法名逐类扫描均无命中 |
+
+**踩过的坑**：曾用「从补丁 jar 里挑 `PatternUploadTarget` + `PatternRecipeMatcher` 还原」的方式拼出一个所谓 stock jar，结果 `PatternUploadSession` 仍在调用 `neoecoae$holdsRecipe`，而该方法已随 `PatternUploadTarget` 被还原掉 → 运行时抛 `NoSuchMethodError` 崩溃。**只还原部分类必然产生不自洽的混合体。**
+
+`PatternUploadSession` 里的 `neoecoae$holdsRecipe` 调用本身也是补丁的一部分（原版 29833 B / 补丁版 32560 B），完整还原只能整包替换。
+
 ## 如何构建带磨头补丁的 jar
 
 1. 按上游 README 构建官方 jar：`./gradlew build`（需要 GTNH 开发工具链）。
