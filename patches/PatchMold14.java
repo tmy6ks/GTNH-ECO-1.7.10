@@ -57,6 +57,7 @@ public class PatchMold14 {
     private static final String TILE_ENTITY = "net/minecraft/tileentity/TileEntity";
     private static final String FORGE_DIRECTION = "net/minecraftforge/common/util/ForgeDirection";
     private static final String INON_CONSUMED = "gregtech/api/interfaces/INonConsumedItemDisplay";
+    private static final String GT_RECIPE = "gregtech/api/util/GTRecipe";
     private static final String IDUAL_INPUT_HATCH = "gregtech/common/tileentities/machines/IDualInputHatch";
     private static final String WORLD = "net/minecraft/world/World";
 
@@ -102,6 +103,7 @@ public class PatchMold14 {
         addMoldForHost(cn);
         addDiagMatch(cn);
         addSpecialItemIdSet(cn);
+        addSpecialItemHit(cn);
         addMapNamesFor(cn);
         addLogStacks(cn);
         addLog2(cn);
@@ -1092,6 +1094,138 @@ public class PatchMold14 {
     }
 
     /**
+     * 反查路线（fix1）：private static boolean neoecoae$specialItemHit(RecipeMap, ItemId)
+     *
+     * GT 的 getNonConsumedInputItemIds() 只扫描 GTRecipe.mInputs 里 stackSize==0 的物品，
+     * **完全不看 mSpecialItems**。而真正的"模具 / 模头"是放在特种槽里的，存于
+     * GTRecipe.mSpecialItems（声明为 Object，实际可能是 ItemStack / ItemStack[] / Object[]）。
+     *
+     * 本方法遍历该池全部配方，把 mSpecialItems 里的 ItemStack 逐个与 id 比对。
+     * 作为 mapNamesFor 的第二判据（mInputs 集合未命中时才会走到）。
+     */
+    private static void addSpecialItemHit(ClassNode cn) {
+        MethodNode mn = new MethodNode(
+                Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
+                "neoecoae$specialItemHit",
+                "(L" + RECIPE_MAP + ";L" + GT_UTILITY_ITEM_ID + ";)Z", null, null);
+        InsnList c = mn.instructions;
+
+        LabelNode lHead = new LabelNode();
+        LabelNode lNext = new LabelNode();
+        LabelNode lIsArr = new LabelNode();
+        LabelNode lArrHead = new LabelNode();
+        LabelNode lArrNext = new LabelNode();
+        LabelNode lArrEnd = new LabelNode();
+        LabelNode lTrue = new LabelNode();
+        LabelNode lFalse = new LabelNode();
+
+        // if (map == null || id == null) return false;
+        c.add(new VarInsnNode(Opcodes.ALOAD, 0));
+        c.add(new JumpInsnNode(Opcodes.IFNULL, lFalse));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 1));
+        c.add(new JumpInsnNode(Opcodes.IFNULL, lFalse));
+
+        // Iterator it = map.getAllRecipes().iterator();  // local 2
+        c.add(new VarInsnNode(Opcodes.ALOAD, 0));
+        c.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, RECIPE_MAP, "getAllRecipes",
+                "()Ljava/util/Collection;", false));
+        c.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Collection", "iterator",
+                "()Ljava/util/Iterator;", true));
+        c.add(new VarInsnNode(Opcodes.ASTORE, 2));
+
+        c.add(lHead);
+        c.add(new VarInsnNode(Opcodes.ALOAD, 2));
+        c.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Iterator", "hasNext", "()Z", true));
+        c.add(new JumpInsnNode(Opcodes.IFEQ, lFalse));
+
+        // GTRecipe r = (GTRecipe) it.next();  // local 3
+        c.add(new VarInsnNode(Opcodes.ALOAD, 2));
+        c.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Iterator", "next",
+                "()Ljava/lang/Object;", true));
+        c.add(new TypeInsnNode(Opcodes.CHECKCAST, GT_RECIPE));
+        c.add(new VarInsnNode(Opcodes.ASTORE, 3));
+
+        // Object sp = r.mSpecialItems;  // local 4
+        c.add(new VarInsnNode(Opcodes.ALOAD, 3));
+        c.add(new FieldInsnNode(Opcodes.GETFIELD, GT_RECIPE, "mSpecialItems", "Ljava/lang/Object;"));
+        c.add(new VarInsnNode(Opcodes.ASTORE, 4));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 4));
+        c.add(new JumpInsnNode(Opcodes.IFNULL, lNext));
+
+        // if (sp instanceof ItemStack) { if (id.equals(ItemId.create((ItemStack) sp))) return true; goto lNext; }
+        c.add(new VarInsnNode(Opcodes.ALOAD, 4));
+        c.add(new TypeInsnNode(Opcodes.INSTANCEOF, ITEM_STACK));
+        c.add(new JumpInsnNode(Opcodes.IFEQ, lIsArr));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 1));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 4));
+        c.add(new TypeInsnNode(Opcodes.CHECKCAST, ITEM_STACK));
+        c.add(new MethodInsnNode(Opcodes.INVOKESTATIC, GT_UTILITY_ITEM_ID, "create",
+                "(L" + ITEM_STACK + ";)L" + GT_UTILITY_ITEM_ID + ";", false));
+        c.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, GT_UTILITY_ITEM_ID, "equals",
+                "(Ljava/lang/Object;)Z", false));
+        c.add(new JumpInsnNode(Opcodes.IFNE, lTrue));
+        c.add(new JumpInsnNode(Opcodes.GOTO, lNext));
+
+        // else if (sp instanceof Object[]) { Object[] arr = (Object[]) sp;  // local 5
+        c.add(lIsArr);
+        c.add(new VarInsnNode(Opcodes.ALOAD, 4));
+        c.add(new TypeInsnNode(Opcodes.INSTANCEOF, "[Ljava/lang/Object;"));
+        c.add(new JumpInsnNode(Opcodes.IFEQ, lNext));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 4));
+        c.add(new TypeInsnNode(Opcodes.CHECKCAST, "[Ljava/lang/Object;"));
+        c.add(new VarInsnNode(Opcodes.ASTORE, 5));
+
+        // int i = 0;  // local 6
+        c.add(new InsnNode(Opcodes.ICONST_0));
+        c.add(new VarInsnNode(Opcodes.ISTORE, 6));
+
+        c.add(lArrHead);
+        c.add(new VarInsnNode(Opcodes.ILOAD, 6));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 5));
+        c.add(new InsnNode(Opcodes.ARRAYLENGTH));
+        c.add(new JumpInsnNode(Opcodes.IF_ICMPGE, lArrEnd));
+
+        // Object o = arr[i];  // local 7
+        c.add(new VarInsnNode(Opcodes.ALOAD, 5));
+        c.add(new VarInsnNode(Opcodes.ILOAD, 6));
+        c.add(new InsnNode(Opcodes.AALOAD));
+        c.add(new VarInsnNode(Opcodes.ASTORE, 7));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 7));
+        c.add(new JumpInsnNode(Opcodes.IFNULL, lArrNext));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 7));
+        c.add(new TypeInsnNode(Opcodes.INSTANCEOF, ITEM_STACK));
+        c.add(new JumpInsnNode(Opcodes.IFEQ, lArrNext));
+        // if (id.equals(ItemId.create((ItemStack) o))) return true;
+        c.add(new VarInsnNode(Opcodes.ALOAD, 1));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 7));
+        c.add(new TypeInsnNode(Opcodes.CHECKCAST, ITEM_STACK));
+        c.add(new MethodInsnNode(Opcodes.INVOKESTATIC, GT_UTILITY_ITEM_ID, "create",
+                "(L" + ITEM_STACK + ";)L" + GT_UTILITY_ITEM_ID + ";", false));
+        c.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, GT_UTILITY_ITEM_ID, "equals",
+                "(Ljava/lang/Object;)Z", false));
+        c.add(new JumpInsnNode(Opcodes.IFNE, lTrue));
+
+        c.add(lArrNext);
+        c.add(new IincInsnNode(6, 1));
+        c.add(new JumpInsnNode(Opcodes.GOTO, lArrHead));
+
+        c.add(lArrEnd);
+        c.add(lNext);
+        c.add(new JumpInsnNode(Opcodes.GOTO, lHead));
+
+        c.add(lTrue);
+        c.add(new InsnNode(Opcodes.ICONST_1));
+        c.add(new InsnNode(Opcodes.IRETURN));
+        c.add(lFalse);
+        c.add(new InsnNode(Opcodes.ICONST_0));
+        c.add(new InsnNode(Opcodes.IRETURN));
+
+        mn.maxStack = 4;
+        mn.maxLocals = 8;
+        cn.methods.add(mn);
+    }
+
+    /**
      * 反查路线（fix1）：private static String neoecoae$mapNamesFor(ItemStack)
      *
      * 不再"猜"某个物品是不是模具，而是直接问 GT 的配方池：
@@ -1114,6 +1248,7 @@ public class PatchMold14 {
         LabelNode lBuild = new LabelNode();
         LabelNode lHead = new LabelNode();
         LabelNode lSkip = new LabelNode();
+        LabelNode lDoAppend = new LabelNode();
         LabelNode lAppend = new LabelNode();
         LabelNode lEnd = new LabelNode();
 
@@ -1177,16 +1312,23 @@ public class PatchMold14 {
         c.add(new TypeInsnNode(Opcodes.CHECKCAST, RECIPE_MAP));
         c.add(new VarInsnNode(Opcodes.ASTORE, 5));
 
-        // if (!m.getNonConsumedInputItemIds().contains(id)) continue;
+        // if (m.getNonConsumedInputItemIds().contains(id)) goto lDoAppend;   // 判据 1：mInputs stackSize==0
         c.add(new VarInsnNode(Opcodes.ALOAD, 5));
         c.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, RECIPE_MAP, "getNonConsumedInputItemIds",
                 "()Ljava/util/Set;", false));
         c.add(new VarInsnNode(Opcodes.ALOAD, 1));
         c.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Set", "contains",
                 "(Ljava/lang/Object;)Z", true));
+        c.add(new JumpInsnNode(Opcodes.IFNE, lDoAppend));
+        // else if (!neoecoae$specialItemHit(map, id)) continue;   // 判据 2：mSpecialItems（模具/模头特种槽）
+        c.add(new VarInsnNode(Opcodes.ALOAD, 5));
+        c.add(new VarInsnNode(Opcodes.ALOAD, 1));
+        c.add(new MethodInsnNode(Opcodes.INVOKESTATIC, MATCHER, "neoecoae$specialItemHit",
+                "(L" + RECIPE_MAP + ";L" + GT_UTILITY_ITEM_ID + ";)Z", false));
         c.add(new JumpInsnNode(Opcodes.IFEQ, lSkip));
 
-        // if (sb.length() > 0) sb.append(',');
+        // lDoAppend: if (sb.length() > 0) sb.append(',');
+        c.add(lDoAppend);
         c.add(new VarInsnNode(Opcodes.ALOAD, 3));
         c.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "length", "()I", false));
         c.add(new JumpInsnNode(Opcodes.IFEQ, lAppend));
