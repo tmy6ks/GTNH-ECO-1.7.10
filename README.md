@@ -54,7 +54,7 @@ This fork adds a set of GTNH mold-recipe-oriented improvements to pattern auto-u
 
 1. **Upload list shows the mold name**: when the target's non-consuming item slot holds the correct mold, the list shows `original name [can upload <mold name> recipe]`; empty or unrelated targets keep the original name without spurious suffixes.
 2. **Integrated / programming circuits are not molds**: `integrated_circuit`, `prog_toolkit` (Programming Toolkit MK.II), and `programming_circuit` are never misidentified as molds.
-3. **sciencenotleisure input hatches / humongous input hatches supported**: molds placed in these hatches are recognized; when an ME interface is adjacent to such a hatch, the list and auto-upload also show/select the mold inside.
+3. **All container types supported**: molds / mold heads / powder catalysts / lenses are recognized in **input buses**, **input hatches**, **humongous input hatches**, **crafting input hatches** and **ME input hatches** alike; when an ME interface is adjacent to such a container, the list and auto-upload also show/select the item inside. Mechanism: plain buses scan every slot, while the `IDualInputHatch` family is read from **both** `getSharedItems()` and `getRealInventory()` — the non-consumed slot usually is not visible through the former. See the "How it works" section of [MODIFICATIONS.md](/MODIFICATIONS.md).
 4. **Targets with the correct mold are ranked first**: auto-upload is more likely to pick the target that already holds the matching mold.
 5. **Matching fix**: recipes that need a mold now match the target that actually holds the corresponding mold, fixing the original "wrong target uploaded" behavior.
 6. **Duplicate patterns are rejected and recycled into blank patterns**: before uploading, the session checks whether the network already holds a pattern for the same recipe, comparing the pattern NBT **while ignoring the `encodedAt` encoding timestamp** (upstream compared it too, and since that timestamp differs on every encode, duplicate detection never fired). If a pattern for the same recipe already exists, the upload is rejected and that pattern is **recycled back into a blank pattern** and returned to the network / player instead of creating a duplicate.
@@ -64,7 +64,7 @@ This fork adds a set of GTNH mold-recipe-oriented improvements to pattern auto-u
 
    A hit yields the owning recipe pool (`unlocalizedName` is the machine type). Results are cached per item and the lookup only runs when normal matching has already failed, so the hot path is unaffected.
 
-You can use the prebuilt `neoecoae-7.3.0-beta2-fix2.jar` attached to the Release (all patches already injected, drop it into `.minecraft/mods`); for a from-source build, see [MODIFICATIONS.md](/MODIFICATIONS.md). A 100% upstream-stock `neoecoae-7.3.0-beta2-stock.jar` (none of this fork's patches) is also provided.
+You can use the prebuilt `neoecoae-7.3.0-beta2-fix3.jar` attached to the Release (all patches already injected, drop it into `.minecraft/mods`); for a from-source build, see [MODIFICATIONS.md](/MODIFICATIONS.md). A 100% upstream-stock `neoecoae-7.3.0-beta2-stock.jar` (none of this fork's patches) is also provided.
 
 ## License
 

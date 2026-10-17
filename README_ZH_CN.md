@@ -44,8 +44,12 @@ Neo ECO AE Extension - GTNH 1.7.10 是 [Neo ECO AE Extension](https://github.com
    `原名 [可上传<模头名>的配方]`；空槽或无关目标显示原名，不再出现垃圾后缀。
 2. **集成电路 / 编程电路不算模具**：`integrated_circuit`、`prog_toolkit`（编程工具箱 MK.II）、
    `programming_circuit` 不会被误识别为模头。
-3. **支持 sciencenotleisure 的输入总成 / 巨型输入总成**：模具放在这些总成里也能被识别；
-   当 ME 接口贴着这些总成时，列表与自动上传同样会显示 / 选中其中的模头。
+3. **支持全部容器类型**：磨具 / 模头 / 粉催化剂 / 透镜放在以下任一容器里都能被识别 ——
+   **输入总线**、**输入总成**、**巨型输入总成**、**样板总成**、**ME 输入总成**；
+   当 ME 接口贴着这些容器时，上传列表与自动上传同样会显示 / 选中其中的物品。
+   原理：普通总线扫全部槽位；`IDualInputHatch` 家族则**同时**读 `getSharedItems()` 与
+   `getRealInventory()` 两个来源（不消耗物品槽在前者里往往读不到），
+   详见 [MODIFICATIONS.md](/MODIFICATIONS.md) 的「识别原理」。
 4. **有正确模头的目标排序优先**：自动上传更可能选到已放好对应模具的目标。
 5. **匹配修正**：需要模具的配方能正确匹配到放置了对应模具的目标，修复原版可能"传错目标"的问题。
 6. **相同样板禁止重复上传，并回收为空白样板退回网络**：上传前会检查网络中是否已存在同配方的样板，
@@ -62,7 +66,7 @@ Neo ECO AE Extension - GTNH 1.7.10 是 [Neo ECO AE Extension](https://github.com
    命中后即可得到所属配方池（`unlocalizedName` 即机器类型）。结果按物品缓存，且只在常规匹配全部失败时才触发，
    不增加正常路径开销。
 
-可直接使用 Release 中附带的 `neoecoae-7.3.0-beta2-fix2.jar`（已注入全部补丁，放进 `.minecraft/mods` 即可）；
+可直接使用 Release 中附带的 `neoecoae-7.3.0-beta2-fix3.jar`（已注入全部补丁，放进 `.minecraft/mods` 即可）；
 如需自行构建，步骤见 [MODIFICATIONS.md](/MODIFICATIONS.md)。
 另含一份 100% 还原上游的 `neoecoae-7.3.0-beta2-stock.jar`（不含本 fork 任何补丁）。
 

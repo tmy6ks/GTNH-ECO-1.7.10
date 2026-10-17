@@ -33,6 +33,52 @@ GPL-3.0）。**上游的代码、LICENSE、作者署名全部原样保留**，�
    命中后即得所属配方池（`unlocalizedName` 可推断机器类型）。结果缓存在
    `neoecoae$ncCache`（`ItemId -> String`），且仅在常规匹配全部失败时才触发反查。
 
+## 识别原理（完整链路）
+
+### 1. 容器发现
+
+`neoecoae$adjacentMachines(host)` 先从上传目标取出 `TileEntity`，按
+`TileEntity` → `IInterfaceHost` → `IInterfaceViewable` → `IPatternUploadProvider` 四路尝试
+（neoecoae 的 `TileECOInterface` 本身是 `TileEntity`，第一条即命中），
+然后扫描**全部 6 个方向**，凡相邻方块是 `IGregTechTileEntity`，取其
+`IMetaTileEntity` 加入候选列表。不依赖 `getTargets()`，也就不受接口方向配置影响。
+
+### 2. 不消耗物品收集（按容器类型分支）
+
+`neoecoae$collectSpecialFromHatch(hatch, map, cands)`：
+
+| 容器类型 | 读取方式 |
+|---|---|
+| 普通 `MTEHatch`（**输入总线**、输入仓） | `func_70302_i_()` 取槽数 → 逐槽 `func_70301_a(i)`，跳过 `getCircuitSlot()` 电路槽，收集所有非空物品 |
+| `IDualInputHatch`（**输入总成** / **巨型输入总成** / **样板总成** / **ME 输入总成**） | ① 先读 `getSharedItems()`；② **无条件**再扫 `getRealInventory()`，并跳过 `toString` 含 `Encoded` / `attern` 的样板 |
+
+> **为什么必须双来源读取**：`getSharedItems()` 通常只含电路与手动槽，**不消耗物品槽在
+> `getRealInventory()` 里**。若按旧逻辑「只有 `getSharedItems()` 一个物品都没收到时才回退」，
+> 一旦 shared 非空（例如放了编程电路），就永远不会扫真实仓库 → 总成里的模具永远读不到。
+> 这是「输入总成 / 巨型输入总成识别不出」的真正原因。
+
+### 3. 判定：反查配方池（不枚举物品）
+
+`neoecoae$mapNamesFor(ItemStack)` 遍历 `RecipeMap.ALL_RECIPE_MAPS`，两条判据**任一命中**即确认：
+
+| 判据 | 数据来源 | 覆盖类别 |
+|---|---|---|
+| `RecipeMap.getNonConsumedInputItemIds()` | GT 自身实现：遍历该池全部配方，收集 `mInputs` 中 `stackSize == 0` 的物品 ItemId | **粉催化剂、透镜** 等 |
+| `GTRecipe.mSpecialItems` | 本补丁新增扫描；该字段声明为 `Object`，实际可能是 `ItemStack` / `ItemStack[]` / `Object[]` | **模具、模头** 等特种槽物品 |
+
+两者互补：GT 自带的判据**完全不看 `mSpecialItems`**，而模具/模头恰恰存在那里。
+
+命中后返回该池的 `unlocalizedName`（多个用逗号分隔）——**配方池即机器类型**。
+结果缓存在 `neoecoae$ncCache`（`HashMap<ItemId, String>`），且只在常规匹配全部失败时才触发反查，
+正常路径零额外开销。
+
+### 4. 匹配与显示
+
+- 命中后把该物品作为「模具」加入 `findRecipeQuery()` 的输入数组，使配方能被正确命中
+  （`specialSlotSensitive=false` 的配方图如挤压机，必须把模具放进 items 才能匹配）；
+- 上传列表显示 `原名 [可上传<模头名>的配方]`；
+- 有正确模具的目标 `compatibilityRank` 优先，自动上传更可能选中正确目标。
+
 ## 实现方式说明（重要）
 
 这些修改以 **ASM 字节码补丁** 的形式存在（见 `patches/`），而不是改上游 `.java` 源码。原因：
@@ -62,7 +108,7 @@ ASM 补丁脚本源码。上游的 `src/` 目录**完全未被改动**。
    ```
    python patches/inject56.py <官方jar> <产物jar> <条目名> <class文件路径>
    ```
-3. 或者直接用 GitHub Release 里附带的 `neoecoae-7.3.0-beta2-fix2.jar`（已注入全部补丁，可直接放进
+3. 或者直接用 GitHub Release 里附带的 `neoecoae-7.3.0-beta2-fix3.jar`（已注入全部补丁，可直接放进
    `.minecraft/mods`）。
 
 ## GPL-3.0 合规
