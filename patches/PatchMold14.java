@@ -6,7 +6,7 @@ import java.util.*;
 /**
  * fix14: 在 fix13 基础上，处理 `specialSlotSensitive=false` 的配方图（如挤压机 extruder）。
  * 日志显示 extruder 的 sens=false，说明 GT 在 filterFindRecipe 中不会比较 specialSlot。
- * 对这类图，把候选磨具直接加入 items 数组再做 findRecipeQuery()，才能命中正确的配方。
+ * 对这类图，把候选模具直接加入 items 数组再做 findRecipeQuery()，才能命中正确的配方。
  * 对 sens=true 的图（如压模、冲压），仍走原来的 specialSlot(mold) 路径。
  *
  * fix9~fix11 始终无效的真正根因（fix12 才定位到）：
@@ -15,7 +15,7 @@ import java.util.*;
  * ICraftingProvider，**不实现 IInterfaceHost**（也不实现 IInterfaceViewable）。
  * 因此 fix9 起的 adjacentMachines() 第一句
  *     if (!(host instanceof IInterfaceHost)) return result;
- * 恒为真 → 相邻机器列表恒为空 → 磨具从未被扫描过。
+ * 恒为真 → 相邻机器列表恒为空 → 模具从未被扫描过。
  * 另外 getTargets() 也不可靠：AE2 接口默认可能未配置任何目标方向。
  *
  * fix12 改动（重写 adjacentMachines）：
@@ -113,7 +113,7 @@ public class PatchMold14 {
                 "neoecoae$oN", "I", null, null));
         cn.fields.add(new FieldNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
                 "neoecoae$dumpN", "I", null, null));
-        // fix36：记录本次 matches 收集到的磨具，供 PatternUploadTarget 在上传列表显示（像输入总线 Waila 的〔模头（杆）〕）
+        // fix36：记录本次 matches 收集到的模具，供 PatternUploadTarget 在上传列表显示（像输入总线 Waila 的〔模头（杆）〕）
         cn.fields.add(new FieldNode(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC,
                 "neoecoae$lastMold", "L" + ITEM_STACK + ";", null, null));
         // fix38diag：给上传/显示探针一条独立计数通道，不被 [M]/[S]/[H] 噪声挤掉
@@ -528,7 +528,7 @@ public class PatchMold14 {
         ins.add(new JumpInsnNode(Opcodes.IFGE, lPrint));
         ins.add(new JumpInsnNode(Opcodes.GOTO, lLoop));
 
-        // lPrint: 打印铁杆配方的输入/输出/磨具
+        // lPrint: 打印铁杆配方的输入/输出/模具
         ins.add(lPrint);
         ins.add(new LdcInsnNode("  [R] in="));
         ins.add(new VarInsnNode(Opcodes.ALOAD, 5));
@@ -637,8 +637,8 @@ public class PatchMold14 {
 
     /**
      * fix36：public static ItemStack neoecoae$moldForHost(Object host, RecipeMap, IAEStack[])
-     * 供 PatternUploadTarget 在上传列表显示目标磨具：临时把 contextHost 设为 host，
-     * 调 specialSlotFor2 收集该主机输入总线的磨具，用完恢复原 contextHost。
+     * 供 PatternUploadTarget 在上传列表显示目标模具：临时把 contextHost 设为 host，
+     * 调 specialSlotFor2 收集该主机输入总线的模具，用完恢复原 contextHost。
      */
     private static void addMoldForHost(ClassNode cn) {
         MethodNode mn = new MethodNode(
@@ -674,14 +674,14 @@ public class PatchMold14 {
     }
 
     /**
-     * fix33（真正的根因修复）：把磨具加入 itemInputs。
+     * fix33（真正的根因修复）：把模具加入 itemInputs。
      *
      * fix32 dump 证实：铁杆配方 mInputs = [item.ingotIron@1, 杆模@0]——消耗输入就是原版
-     * item.ingotIron（无需转 GT 形态），但**磨具(数量0)也在 mInputs 里**。原 matches() 只传
+     * item.ingotIron（无需转 GT 形态），但**模具(数量0)也在 mInputs 里**。原 matches() 只传
      * items=[item.ingotIron]，isRecipeInputEqual 遍历配方 mInputs 时数量0的杆模在传入 items
      * 找不到匹配 → 恒 false → find() 恒 null（specialSlot 对 sens=false 机器被 GT 忽略）。
      *
-     * 修复：提前调 specialSlotFor2 取磨具，add 进 itemList，使 q.items 含磨具；原 specialSlotFor2
+     * 修复：提前调 specialSlotFor2 取模具，add 进 itemList，使 q.items 含模具；原 specialSlotFor2
      * 调用改为复用(aload 5)，避免 contextHost 被二次消费。
      */
     private static void patchMatchesAddMold(MethodNode mn) {
@@ -699,10 +699,10 @@ public class PatchMold14 {
                     ins.add(new VarInsnNode(Opcodes.ALOAD, 7));   // outputs
                     ins.add(new MethodInsnNode(Opcodes.INVOKESTATIC, MATCHER, SS, SS_DESC, false));
                     ins.add(new VarInsnNode(Opcodes.ASTORE, 5));  // mold (var5 原 hasCircuit，223 后空闲)
-                    // fix36：记录本次磨具到 lastMold（含 null=该目标无磨具），供上传列表显示磨具名
+                    // fix36：记录本次模具到 lastMold（含 null=该目标无模具），供上传列表显示模具名
                     ins.add(new VarInsnNode(Opcodes.ALOAD, 5));
                     ins.add(new FieldInsnNode(Opcodes.PUTSTATIC, MATCHER, "neoecoae$lastMold", "L" + ITEM_STACK + ";"));
-                    // fix35：仅当收集到磨具才加入 items（没磨具靠 isRecipeInputEqual 缺磨具判 N，杜绝 null 混入）
+                    // fix35：仅当收集到模具才加入 items（没模具靠 isRecipeInputEqual 缺模具判 N，杜绝 null 混入）
                     ins.add(new VarInsnNode(Opcodes.ALOAD, 5));
                     ins.add(new JumpInsnNode(Opcodes.IFNULL, lSkip));
                     ins.add(new VarInsnNode(Opcodes.ALOAD, 3));
@@ -748,11 +748,11 @@ public class PatchMold14 {
      * fix14：把 matches() 里对 neoecoae$specialSlotFor(map,list) 的调用改成
      * neoecoae$specialSlotFor2(map, list, outputs)。
      *
-     * 原理：原逻辑只返回「第一个」不消耗物品，但一个仓里往往同时放着多种磨具
+     * 原理：原逻辑只返回「第一个」不消耗物品，但一个仓里往往同时放着多种模具
      * （如模头(杆)/模头(丝)/模头(螺丝)…），而 GT 的 filterFindRecipe 要求
      * recipe.mSpecialItems 与传入的 specialSlot 精确相等，所以取第一个几乎必然
      * 对不上号。把产物数组一并传进去后，specialSlotFor2 可以逐个候选做
-     * findRecipeQuery + outputsMatch 校验，挑出真正匹配的那个磨具。
+     * findRecipeQuery + outputsMatch 校验，挑出真正匹配的那个模具。
      *
      * 字节码层面只需两步：
      * 1. 在 invokestatic 前插入 aload 7（outputs 所在局部槽，已从 dump 确证）
@@ -2232,7 +2232,7 @@ public class PatchMold14 {
      * private static boolean neoecoae$diagMatch(RecipeMap map, ItemStack[] its, ItemStack mold, IAEStack[] outs)
      *
      * 诊断版匹配：做一次 findRecipeQuery + outputsMatch，并输出状态码便于定位：
-     *   st=0 → 连配方都没找到（输入/磨具不匹配）
+     *   st=0 → 连配方都没找到（输入/模具不匹配）
      *   st=1 → 找到配方但产物对不上（outputsMatch 失败）
      *   st=2 → 完全命中
      */
@@ -2297,7 +2297,7 @@ public class PatchMold14 {
         ins.add(new VarInsnNode(Opcodes.ASTORE, 4));
         ins.add(new JumpInsnNode(Opcodes.GOTO, lAfterFind));
 
-        // sens=false: 把磨具加入 items 数组，用 items(newItems) 查找
+        // sens=false: 把模具加入 items 数组，用 items(newItems) 查找
         ins.add(lSensFalse);
 
         // int len = its.length;
@@ -2397,14 +2397,14 @@ public class PatchMold14 {
     /**
      * private static Set neoecoae$specialItemIdSet(RecipeMap map)
      *
-     * fix16 核心：GT 的「不消耗物品」（磨具）存在 GTRecipe.mSpecialItems 里，
+     * fix16 核心：GT 的「不消耗物品」（模具）存在 GTRecipe.mSpecialItems 里，
      * 而 RecipeMap.getNonConsumedInputItemIds() 统计的是「mInputs 里数量为 0 的物品」，
-     * 对 extruder 这类把磨具放 mSpecialItems 的配方恒为空集 —— 所以原版 mod 用
-     * INonConsumedItemDisplay.isDisplayableItem 筛磨具，对挤压机永远筛不出东西
+     * 对 extruder 这类把模具放 mSpecialItems 的配方恒为空集 —— 所以原版 mod 用
+     * INonConsumedItemDisplay.isDisplayableItem 筛模具，对挤压机永远筛不出东西
      * （fix15diag 实测 extruder 的候选数 candN=0）。
      *
      * 正确判据与 RecipeMapBackend.filterFindRecipe 一致：直接取所有配方的
-     * mSpecialItems 组成 ItemId 集合，仓里物品命中集合的才是真正的磨具候选。
+     * mSpecialItems 组成 ItemId 集合，仓里物品命中集合的才是真正的模具候选。
      */
     private static void addSpecialItemIdSet(ClassNode cn) {
         MethodNode mn = new MethodNode(

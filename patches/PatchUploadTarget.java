@@ -12,13 +12,13 @@ import java.util.List;
 /**
  * neoecoae 上传目标补丁（第二类补丁，作用于 PatternUploadTarget）。
  *
- * fix36 显示增强：上传候选列表每个目标名后显示磨具。
+ * fix36 显示增强：上传候选列表每个目标名后显示模具。
  * fix38diag：探针走 [NEO2]（PatternRecipeMatcher.neoecoae$log2，独立计数），打印最终名字。
- * fix39：自己不消耗物品槽里有对应磨具的总成排序优先（compatibilityRank -100）。
- * fix40：ownMold 判定改为「与整机 moldForHost 磨具比对（GTUtility.areStacksEqual）」——
+ * fix39：自己不消耗物品槽里有对应模具的总成排序优先（compatibilityRank -100）。
+ * fix40：ownMold 判定改为「与整机 moldForHost 模具比对（GTUtility.areStacksEqual）」——
  *        之前用 diagMatch(空输入,...) 验证，但配方还需要铁锭等真实输入，空输入恒 false（own 恒 null 的根因）。
  *        并按用户要求做严格过滤：样板总成类目标（host instanceof IDualInputHatch），
- *        自己不消耗物品槽里没有匹配磨具的，从上传列表与上传白名单里剔除：
+ *        自己不消耗物品槽里没有匹配模具的，从上传列表与上传白名单里剔除：
  *        - isRecipeCompatible(Z,details,routeKey) 入口插 gate → false（列表不显示）
  *        - isExactMatch(Z,details,routeKey)        入口插 gate → false（手动/自动都不上传）
  */
@@ -231,13 +231,13 @@ public class PatchUploadTarget {
         System.out.println("  added neoecoae$getMoldSuffix (own-slot first)");
     }
 
-    // ------------------------------------------------- fix40：自己槽里的磨具
+    // ------------------------------------------------- fix40：自己槽里的模具
 
     /**
      * private static ItemStack neoecoae$machineMold(PatternUploadTarget self, PatternRouteKey routeKey,
      *                                               ICraftingPatternDetails details)
      *
-     * 整机级磨具（moldForHost）：null 表示该配方/机器根本不需要磨具（搅拌机、组装机等）。
+     * 整机级模具（moldForHost）：null 表示该配方/机器根本不需要模具（搅拌机、组装机等）。
      */
     private static void addMachineMold(ClassNode cn) {
         MethodNode mn = new MethodNode(
@@ -283,7 +283,7 @@ public class PatchUploadTarget {
         ins.add(new VarInsnNode(Opcodes.ASTORE, 7));
         // ItemStack r = PatternRecipeMatcher.neoecoae$moldForHost(host, map, outputs);
         // moldForHost 内部已自行按 host 解析 IMetaTileEntity / IInterfaceViewable，
-        // 故不再限制 IDualInputHatch —— 普通机器（挤出机本体等）也能取磨具。
+        // 故不再限制 IDualInputHatch —— 普通机器（挤出机本体等）也能取模具。
         ins.add(new VarInsnNode(Opcodes.ALOAD, 5));
         ins.add(new VarInsnNode(Opcodes.ALOAD, 4));
         ins.add(new VarInsnNode(Opcodes.ALOAD, 7));
@@ -293,7 +293,7 @@ public class PatchUploadTarget {
         // if (r == null) return null;
         ins.add(new VarInsnNode(Opcodes.ALOAD, 6));
         ins.add(new JumpInsnNode(Opcodes.IFNULL, lNull));
-        // if (neoecoae$isIntegratedCircuit(r)) return null;   // 集成电路不是磨具，不能当模头显示
+        // if (neoecoae$isIntegratedCircuit(r)) return null;   // 集成电路不是模具，不能当模头显示
         ins.add(new VarInsnNode(Opcodes.ALOAD, 6));
         ins.add(new MethodInsnNode(Opcodes.INVOKESTATIC, TARGET, "neoecoae$isIntegratedCircuit",
                 "(L" + ITEM_STACK + ";)Z", false));
@@ -320,7 +320,7 @@ public class PatchUploadTarget {
      * private static ItemStack neoecoae$ownMold(PatternUploadTarget self, PatternRouteKey routeKey,
      *                                           ICraftingPatternDetails details)
      *
-     * fix41：machineMold（整机需要的磨具）与总成自己不消耗物品槽逐个 GTUtility.areStacksEqual 比对。
+     * fix41：machineMold（整机需要的模具）与总成自己不消耗物品槽逐个 GTUtility.areStacksEqual 比对。
      */
     private static void addOwnMold(ClassNode cn) {
         MethodNode mn = new MethodNode(
@@ -514,8 +514,8 @@ public class PatchUploadTarget {
      *                                         ICraftingPatternDetails details, PatternRouteKey routeKey)
      *
      * 返回 true = 该目标应被剔除。
-     * fix55：仅当「该配方确实需要磨具/不消耗物品」且「目标自己槽 AND 输入总线都没有对应磨具」时才剔除。
-     * 这样挤出机磨具放在输入总线的目标不会被误杀；同时没有磨具的空槽目标不会再被扫出来。
+     * fix55：仅当「该配方确实需要模具/不消耗物品」且「目标自己槽 AND 输入总线都没有对应模具」时才剔除。
+     * 这样挤出机模具放在输入总线的目标不会被误杀；同时没有模具的空槽目标不会再被扫出来。
      */
     private static void addOwnGate(ClassNode cn) {
         MethodNode mn = new MethodNode(
@@ -537,7 +537,7 @@ public class PatchUploadTarget {
      * private static boolean neoecoae$recipeNeedsMold(RecipeMap map)
      *
      * 判断该 RecipeMap 的配方是否含有不消耗输入（mInputs stackSize==0）或 mSpecialItems。
-     * 用于 ownGate：只有"需要磨具/不消耗物品"的配方才要求目标必须有对应物品，否则不过滤。
+     * 用于 ownGate：只有"需要模具/不消耗物品"的配方才要求目标必须有对应物品，否则不过滤。
      */
     private static void addRecipeNeedsMold(ClassNode cn) {
         MethodNode mn = new MethodNode(
