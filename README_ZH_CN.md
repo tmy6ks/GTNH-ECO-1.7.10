@@ -34,6 +34,25 @@ Neo ECO AE Extension - GTNH 1.7.10 是 [Neo ECO AE Extension](https://github.com
 .\gradlew.bat runClient
 ```
 
+## 本 fork 的额外修改：上传与磨头（Mold）逻辑
+
+> 与上游代码的完整差异见 [MODIFICATIONS.md](/MODIFICATIONS.md)。上游源码、LICENSE 与作者署名均原样保留，以下逻辑以 **ASM 字节码补丁** 形式叠加（位于 `patches/`），上游 `src/` 未被改动。
+
+本 fork 在样板（Pattern）自动上传环节做了一组针对 GTNH 磨具类配方的优化：
+
+1. **上传列表显示磨头名**：当目标机器的不消耗物品槽里放着正确的磨具时，上传列表显示
+   `原名 [可上传<磨头名>的配方]`；空槽或无关目标显示原名，不再出现垃圾后缀。
+2. **集成电路 / 编程电路不算磨具**：`integrated_circuit`、`prog_toolkit`（编程工具箱 MK.II）、
+   `programming_circuit` 不会被误识别为磨头。
+3. **支持 sciencenotleisure 的输入总成 / 巨型输入总成**：磨具放在这些总成里也能被识别；
+   当 ME 接口贴着这些总成时，列表与自动上传同样会显示 / 选中其中的磨头。
+4. **有正确磨头的目标排序优先**：自动上传更可能选到已放好对应磨具的目标。
+5. **匹配修正**：需要磨具的配方能正确匹配到放置了对应磨具的目标，修复原版可能"传错目标"的问题。
+
+可直接使用 Release 中附带的 `neoecoae-7.3.0-beta2-fix65-working.jar`（已注入全部补丁，放进 `.minecraft/mods` 即可）；
+如需自行构建，步骤见 [MODIFICATIONS.md](/MODIFICATIONS.md)。
+另含一份 100% 还原上游的 `neoecoae-7.3.0-beta2-stock.jar`（不含本 fork 任何补丁）。
+
 ## 许可证
 
 本项目以 [GNU 通用公共许可证 v3.0](/LICENSE) 发布。现代版项目与 GTNH 重写版本的作者信息均保留在项目元数据中。

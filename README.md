@@ -46,6 +46,20 @@ This project uses the GTNH development toolchain and GTNH-maintained forks of AE
 .\gradlew.bat runClient
 ```
 
+## Custom Upload Logic (this fork's additions)
+
+> For the full diff against upstream, see [MODIFICATIONS.md](/MODIFICATIONS.md). Upstream source, LICENSE, and authorship are preserved as-is; the following logic is layered on top as **ASM bytecode patches** under `patches/` — upstream `src/` is untouched.
+
+This fork adds a set of GTNH mold-recipe-oriented improvements to pattern auto-upload:
+
+1. **Upload list shows the mold name**: when the target's non-consuming item slot holds the correct mold, the list shows `original name [can upload <mold name> recipe]`; empty or unrelated targets keep the original name without spurious suffixes.
+2. **Integrated / programming circuits are not molds**: `integrated_circuit`, `prog_toolkit` (Programming Toolkit MK.II), and `programming_circuit` are never misidentified as molds.
+3. **sciencenotleisure input hatches / humongous input hatches supported**: molds placed in these hatches are recognized; when an ME interface is adjacent to such a hatch, the list and auto-upload also show/select the mold inside.
+4. **Targets with the correct mold are ranked first**: auto-upload is more likely to pick the target that already holds the matching mold.
+5. **Matching fix**: recipes that need a mold now match the target that actually holds the corresponding mold, fixing the original "wrong target uploaded" behavior.
+
+You can use the prebuilt `neoecoae-7.3.0-beta2-fix65-working.jar` attached to the Release (all patches already injected, drop it into `.minecraft/mods`); for a from-source build, see [MODIFICATIONS.md](/MODIFICATIONS.md). A 100% upstream-stock `neoecoae-7.3.0-beta2-stock.jar` (none of this fork's patches) is also provided.
+
 ## License
 
 This project is distributed under the [GNU General Public License v3.0](/LICENSE). Credits for the modern project and the GTNH rewrite are retained in the project metadata.
