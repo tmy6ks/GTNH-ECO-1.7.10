@@ -1472,10 +1472,14 @@ public class PatchMold14 {
 
         // fix48: dual 路径若一个物品都没收集到（getSharedItems 对本模组总成恒空），
         // 回退走原版输入总线扫描（h.func_70301_a(i)），让输入总成/巨型输入总成里的模头被识别。
+        // fix2：**不再"仅当 shared 为空才回退"**。
+        // 原因：DualInputHatch（输入总成）/ HumongousDualInputHatch（巨型输入总成）的
+        // getSharedItems() 可能只返回电路/手动槽，而不消耗物品槽并不在其中；
+        // 此时 added != 0，旧逻辑就不会再扫 getRealInventory() → 里面的模具永远读不到。
+        // 改为**无条件**继续扫 getRealInventory()，两个来源都收集（containsItemId 会去重，
+        // 样板由 toString 含 "Encoded"/"attern" 过滤，且后续反查也不会把样板误判为模具）。
         LabelNode lDualDone = new LabelNode();
         ins.add(lDualEnd);
-        ins.add(new VarInsnNode(Opcodes.ILOAD, 8));
-        ins.add(new JumpInsnNode(Opcodes.IFNE, lDualDone));
         // log("[H] dualFb=", hatch.getClass())
         ins.add(new LdcInsnNode("[H] dualFb="));
         ins.add(new VarInsnNode(Opcodes.ALOAD, 0));
