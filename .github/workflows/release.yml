@@ -25,6 +25,7 @@ concurrency:
 
 jobs:
   release:
+    if: false # disabled: this fork publishes releases manually via API; the vX.Y.Z tag check would fail on stock/non-semver tags
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
